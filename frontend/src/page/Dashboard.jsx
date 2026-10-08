@@ -1,13 +1,47 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import SideBar from "../ui/SideBar";
 import FinancialOverview from "./dashboard/FinancialOverview";
 import SummaryCards from "./dashboard/SummaryCards";
 import TransactionFormModal from "./dashboard/TransactionFormModal";
 import TransactionsTable from "./dashboard/TransactionsTable";
-import { formatMoney, initialTransactions } from "./dashboard/dashboardData";
+import { formatMoney } from "./dashboard/dashboardData";
+import {
+  createTransaction as postTransaction,
+  deleteTransaction as deleteTransactionRequest,
+  getDashboard,
+  initializeCategories,
+  getTransactions,
+} from "../services/api";
+
+const emptyTotals = {
+  income: 0,
+  expenses: 0,
+  balance: 0,
+  savings: 0,
+};
 
 export default function Dashboard() {
-  const [transactions, setTransactions] = useState(initialTransactions);
+  const navigate = useNavigate();
+  const [auth] = useState(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem("expenseTrackerAuth") ?? "null");
+    } catch {
+      return null;
+    }
+  });
+  const [transactions, setTransactions] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [totals, setTotals] = useState(emptyTotals);
+  const [monthlyTotals, setMonthlyTotals] = useState({
+    income: 0,
+    expenses: 0,
+    balance: 0,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [operationError, setOperationError] = useState("");
   const [activePage, setActivePage] = useState("Dashboard");
   const [showForm, setShowForm] = useState(false);
   const [transactionType, setTransactionType] = useState("EXPENSE");
@@ -15,25 +49,67 @@ export default function Dashboard() {
   const [form, setForm] = useState({
     title: "",
     amount: "",
-    category: "Food",
+    categoryId: "",
     date: new Date().toLocaleDateString("en-CA"),
   });
 
-  const totals = useMemo(() => {
-    const income = transactions
-      .filter((transaction) => transaction.type === "INCOME")
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-    const expenses = transactions
-      .filter((transaction) => transaction.type === "EXPENSE")
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const loadDashboard = useCallback(async () => {
+    const [dashboardData, transactionData] = await Promise.all([
+      getDashboard(),
+      getTransactions(),
+    ]);
+    const userCategories = await initializeCategories();
 
-    return {
-      income,
-      expenses,
-      balance: income - expenses,
-      savings: income - expenses,
+    setTotals({
+      income: Number(dashboardData.totalIncome ?? 0),
+      expenses: Number(dashboardData.totalExpenses ?? 0),
+      balance: Number(dashboardData.balance ?? 0),
+      savings: Number(dashboardData.balance ?? 0),
+    });
+    setMonthlyTotals({
+      income: Number(dashboardData.monthlyIncome ?? 0),
+      expenses: Number(dashboardData.monthlyExpenses ?? 0),
+      balance: Number(dashboardData.monthlyBalance ?? 0),
+    });
+    setTransactions(
+      transactionData.map((transaction) => ({
+        id: transaction.transactionId,
+        title: transaction.description || transaction.categoryName,
+        category: transaction.categoryName,
+        categoryId: transaction.categoryId,
+        date: transaction.transactionDate,
+        amount: Number(transaction.amount),
+        type: transaction.type,
+      })),
+    );
+    setCategories(userCategories);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initializeDashboard() {
+      try {
+        await loadDashboard();
+      } catch (loadError) {
+        if (isMounted) {
+          if (loadError.status === 401 || loadError.status === 403) {
+            window.localStorage.removeItem("expenseTrackerAuth");
+            navigate("/login", { replace: true });
+            return;
+          }
+          setError(loadError.message);
+        }
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    initializeDashboard();
+    return () => {
+      isMounted = false;
     };
-  }, [transactions]);
+  }, [loadDashboard, navigate]);
 
   const filteredTransactions = transactions.filter((transaction) =>
     `${transaction.title} ${transaction.category} ${transaction.type}`
@@ -43,36 +119,92 @@ export default function Dashboard() {
 
   const openTransactionForm = (type) => {
     setTransactionType(type);
+    const defaultCategory = categories.find(
+      (category) => category.type === type,
+    );
     setForm({
       title: "",
       amount: "",
-      category: type === "INCOME" ? "Salary" : "Food",
+      categoryId: defaultCategory ? String(defaultCategory.categoryId) : "",
       date: new Date().toLocaleDateString("en-CA"),
     });
+    setOperationError("");
     setShowForm(true);
   };
 
-  const addTransaction = (event) => {
+  const addTransaction = async (event) => {
     event.preventDefault();
 
     const amount = Number(form.amount);
-    if (!form.title.trim() || !Number.isFinite(amount) || amount <= 0) {
+    if (
+      !form.title.trim() ||
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !form.categoryId ||
+      !form.date
+    ) {
+      setOperationError("Enter a description, a valid amount, category, and date.");
       return;
     }
 
-    setTransactions((previous) => [
-      {
-        id: Date.now(),
-        title: form.title.trim(),
-        category: form.category,
-        date: form.date,
-        amount,
+    setIsSubmitting(true);
+    setOperationError("");
+    try {
+      await postTransaction({
+        categoryId: Number(form.categoryId),
         type: transactionType,
-      },
-      ...previous,
-    ]);
-    setShowForm(false);
+        amount,
+        description: form.title.trim(),
+        transactionDate: form.date,
+      });
+      setShowForm(false);
+      try {
+        await loadDashboard();
+      } catch (refreshError) {
+        setOperationError(
+          `Transaction saved, but the dashboard could not refresh: ${refreshError.message}`,
+        );
+      }
+    } catch (submitError) {
+      if (submitError.status === 401 || submitError.status === 403) {
+        window.localStorage.removeItem("expenseTrackerAuth");
+        navigate("/login", { replace: true });
+      } else {
+        setOperationError(submitError.message);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  const handleDeleteTransaction = async (transactionId) => {
+    setOperationError("");
+    try {
+      await deleteTransactionRequest(transactionId);
+      setTransactions((current) =>
+        current.filter((transaction) => transaction.id !== transactionId),
+      );
+      try {
+        await loadDashboard();
+      } catch (refreshError) {
+        setOperationError(
+          `Transaction deleted, but the dashboard could not refresh: ${refreshError.message}`,
+        );
+      }
+    } catch (deleteError) {
+      if (deleteError.status === 401 || deleteError.status === 403) {
+        window.localStorage.removeItem("expenseTrackerAuth");
+        navigate("/login", { replace: true });
+      } else {
+        setOperationError(deleteError.message);
+      }
+    }
+  };
+
+  const displayName = auth?.username?.trim() || auth?.email || "there";
+  const userInitial = displayName.charAt(0).toUpperCase();
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
@@ -96,11 +228,11 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700">
-                A
+                {userInitial}
               </div>
 
               <div>
-                <p className="text-sm font-semibold">Anil</p>
+                <p className="text-sm font-semibold">{displayName}</p>
                 <p className="text-xs text-slate-400">Personal Account</p>
               </div>
             </div>
@@ -119,7 +251,7 @@ export default function Dashboard() {
               </p>
 
               <h2 className="mt-2 text-3xl font-extrabold tracking-tight">
-                Good evening, Anil 👋
+                {greeting}, {displayName} 👋
               </h2>
 
               <p className="mt-2 text-sm text-slate-500">
@@ -130,6 +262,7 @@ export default function Dashboard() {
             <div className="flex gap-3">
               <button
                 onClick={() => openTransactionForm("INCOME")}
+                disabled={isLoading}
                 className="rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-50"
               >
                 + Add Income
@@ -137,6 +270,7 @@ export default function Dashboard() {
 
               <button
                 onClick={() => openTransactionForm("EXPENSE")}
+                disabled={isLoading}
                 className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition hover:bg-emerald-600"
               >
                 + Add Expense
@@ -144,21 +278,38 @@ export default function Dashboard() {
             </div>
           </section>
 
+          {error && (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            >
+              {error}
+            </div>
+          )}
+          {operationError && !showForm && (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            >
+              {operationError}
+            </div>
+          )}
+
           <SummaryCards totals={totals} />
 
           {activePage === "Dashboard" && (
-            <FinancialOverview totals={totals} formatMoney={formatMoney} />
+            <FinancialOverview
+              totals={monthlyTotals}
+              formatMoney={formatMoney}
+            />
           )}
 
           <TransactionsTable
             activePage={activePage}
             filteredTransactions={filteredTransactions}
             formatMoney={formatMoney}
-            onDelete={(transactionId) =>
-              setTransactions((previous) =>
-                previous.filter((transaction) => transaction.id !== transactionId),
-              )
-            }
+            isLoading={isLoading}
+            onDelete={handleDeleteTransaction}
             onReturnToDashboard={() => setActivePage("Dashboard")}
             search={search}
             setSearch={setSearch}
@@ -171,6 +322,9 @@ export default function Dashboard() {
           addTransaction={addTransaction}
           form={form}
           onClose={() => setShowForm(false)}
+          categories={categories}
+          error={operationError}
+          isSubmitting={isSubmitting}
           setForm={setForm}
           setTransactionType={setTransactionType}
           transactionType={transactionType}

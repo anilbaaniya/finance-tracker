@@ -1,5 +1,3 @@
-import { monthlyData } from "./dashboardData";
-
 export default function FinancialOverview({ totals, formatMoney }) {
   const expensePercentage =
     totals.income > 0
@@ -13,9 +11,9 @@ export default function FinancialOverview({ totals, formatMoney }) {
       <div className="col-span-2 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-bold text-slate-800">Income vs Expenses</h3>
+            <h3 className="font-bold text-slate-800">This Month</h3>
             <p className="mt-1 text-sm text-slate-400">
-              Your monthly financial activity
+              Current month income and expenses
             </p>
           </div>
 
@@ -31,34 +29,35 @@ export default function FinancialOverview({ totals, formatMoney }) {
           </div>
         </div>
 
-        <div className="mt-8 flex h-56 items-end justify-around gap-3 border-b border-slate-100 pb-2">
-          {monthlyData.map((item) => (
-            <div
-              key={item.month}
-              className="flex h-full flex-1 flex-col items-center justify-end gap-3"
-            >
-              <div className="flex h-full w-full max-w-14 items-end justify-center gap-1">
-                <div
-                  title={`Income: ${item.income}k`}
-                  className="w-1/2 rounded-t-md bg-emerald-400 transition-all duration-500 hover:bg-emerald-600"
-                  style={{ height: `${item.income}%` }}
-                />
-                <div
-                  title={`Expenses: ${item.expense}k`}
-                  className="w-1/2 rounded-t-md bg-rose-300 transition-all duration-500 hover:bg-rose-500"
-                  style={{ height: `${item.expense}%` }}
-                />
+        <div className="mt-8 flex h-56 items-end justify-center gap-12 border-b border-slate-100 pb-2">
+          {[
+            { label: "Income", amount: totals.income, color: "bg-emerald-400" },
+            { label: "Expenses", amount: totals.expenses, color: "bg-rose-300" },
+          ].map((item) => {
+            const maxAmount = Math.max(totals.income, totals.expenses);
+            const barHeight =
+              maxAmount > 0 ? Math.max(4, (item.amount / maxAmount) * 100) : 0;
+
+            return (
+              <div
+                key={item.label}
+                className="flex h-full w-24 flex-col items-center justify-end gap-3"
+              >
+                <span className="text-xs font-medium text-slate-500">
+                  {formatMoney(item.amount)}
+                </span>
+                <div className="flex h-full w-full items-end">
+                  <div
+                    aria-label={`${item.label}: ${formatMoney(item.amount)}`}
+                    className={`w-full rounded-t-md transition-all duration-500 ${item.color}`}
+                    style={{ height: `${barHeight}%` }}
+                  />
+                </div>
+                <span className="text-xs text-slate-400">{item.label}</span>
               </div>
-
-              <span className="text-xs text-slate-400">{item.month}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
-
-        <p className="mt-4 text-xs text-slate-400">
-          Illustrative chart data. Connect your monthly summary API for real
-          figures.
-        </p>
       </div>
 
       <div className="rounded-2xl bg-slate-900 p-6 text-white shadow-sm">

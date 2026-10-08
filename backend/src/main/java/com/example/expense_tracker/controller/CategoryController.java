@@ -53,6 +53,11 @@ public class CategoryController {
         return ResponseEntity.ok(categories);
     }
 
+    @PostMapping("/defaults")
+    public ResponseEntity<List<CategoryResponse>> ensureDefaultCategories() {
+        return ResponseEntity.ok(categoryService.ensureDefaultCategories());
+    }
+
     // ===============================
     // UPDATE CATEGORY
     // PUT /api/categories/{categoryId}

@@ -2,6 +2,7 @@ export default function TransactionsTable({
   activePage,
   filteredTransactions,
   formatMoney,
+  isLoading,
   onDelete,
   onReturnToDashboard,
   search,
@@ -120,7 +121,7 @@ export default function TransactionsTable({
                 <td className="px-6 py-4 text-right">
                   <button
                     onClick={() => onDelete(transaction.id)}
-                    title="Delete sample transaction"
+                    title="Delete transaction"
                     className="rounded-lg px-3 py-2 text-xs font-medium text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                   >
                     Delete
@@ -134,10 +135,14 @@ export default function TransactionsTable({
         {filteredTransactions.length === 0 && (
           <div className="px-6 py-12 text-center">
             <p className="font-semibold text-slate-700">
-              No transactions found
+              {isLoading ? "Loading your transactions..." : "No transactions yet"}
             </p>
             <p className="mt-2 text-sm text-slate-400">
-              Try another search or add a new transaction.
+              {isLoading
+                ? "Your account data is being loaded."
+                : search
+                  ? "Try another search or clear the search field."
+                  : "Add income or an expense to get started."}
             </p>
           </div>
         )}

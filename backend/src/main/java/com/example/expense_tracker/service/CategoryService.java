@@ -16,6 +16,20 @@ import java.util.List;
 @Service
 public class CategoryService {
 
+    private static final List<DefaultCategory> DEFAULT_CATEGORIES = List.of(
+            new DefaultCategory("Salary", Category.CategoryType.INCOME),
+            new DefaultCategory("Freelance", Category.CategoryType.INCOME),
+            new DefaultCategory("Business", Category.CategoryType.INCOME),
+            new DefaultCategory("Investment", Category.CategoryType.INCOME),
+            new DefaultCategory("Other", Category.CategoryType.INCOME),
+            new DefaultCategory("Food", Category.CategoryType.EXPENSE),
+            new DefaultCategory("Transport", Category.CategoryType.EXPENSE),
+            new DefaultCategory("Shopping", Category.CategoryType.EXPENSE),
+            new DefaultCategory("Bills", Category.CategoryType.EXPENSE),
+            new DefaultCategory("Health", Category.CategoryType.EXPENSE),
+            new DefaultCategory("Education", Category.CategoryType.EXPENSE),
+            new DefaultCategory("Other", Category.CategoryType.EXPENSE));
+
     private final CategoryRepository categoryRepository;
     private final AuthenticatedUserService authenticatedUserService;
 
@@ -70,6 +84,28 @@ public class CategoryService {
         List<Category> categories = categoryRepository.findByUser(currentUser);
 
         return categories.stream()
+                .map(this::convertToResponse)
+                .toList();
+    }
+
+    @Transactional
+    public List<CategoryResponse> ensureDefaultCategories() {
+        User currentUser = authenticatedUserService.getCurrentUser();
+
+        for (DefaultCategory defaultCategory : DEFAULT_CATEGORIES) {
+            if (!categoryRepository.existsByUserAndNameAndType(
+                    currentUser,
+                    defaultCategory.name(),
+                    defaultCategory.type())) {
+                Category category = new Category();
+                category.setUser(currentUser);
+                category.setName(defaultCategory.name());
+                category.setType(defaultCategory.type());
+                categoryRepository.save(category);
+            }
+        }
+
+        return categoryRepository.findByUser(currentUser).stream()
                 .map(this::convertToResponse)
                 .toList();
     }
@@ -146,5 +182,10 @@ public class CategoryService {
                 category.getName(),
                 category.getType(),
                 category.getCreatedAt());
+    }
+
+    private record DefaultCategory(
+            String name,
+            Category.CategoryType type) {
     }
 }

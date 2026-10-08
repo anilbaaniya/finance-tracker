@@ -1,28 +1,18 @@
-const incomeCategories = [
-  "Salary",
-  "Freelance",
-  "Business",
-  "Investment",
-  "Other",
-];
-const expenseCategories = [
-  "Food",
-  "Transport",
-  "Shopping",
-  "Bills",
-  "Health",
-  "Education",
-  "Other",
-];
-
 export default function TransactionFormModal({
   addTransaction,
   form,
   onClose,
+  categories,
+  error,
+  isSubmitting,
   setForm,
   setTransactionType,
   transactionType,
 }) {
+  const availableCategories = categories.filter(
+    (category) => category.type === transactionType,
+  );
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
@@ -70,9 +60,14 @@ export default function TransactionFormModal({
               type="button"
               onClick={() => {
                 setTransactionType(type);
+                const firstCategory = categories.find(
+                  (category) => category.type === type,
+                );
                 setForm((previous) => ({
                   ...previous,
-                  category: type === "INCOME" ? "Salary" : "Food",
+                  categoryId: firstCategory
+                    ? String(firstCategory.categoryId)
+                    : "",
                 }));
               }}
               className={`rounded-xl border p-3 text-sm font-semibold transition ${
@@ -94,8 +89,9 @@ export default function TransactionFormModal({
               Description
             </label>
             <input
+              name="description"
               required
-              maxLength={100}
+              maxLength={255}
               value={form.title}
               onChange={(event) =>
                 setForm({ ...form, title: event.target.value })
@@ -110,6 +106,7 @@ export default function TransactionFormModal({
               Amount (NPR)
             </label>
             <input
+              name="amount"
               required
               type="number"
               min="0.01"
@@ -126,26 +123,30 @@ export default function TransactionFormModal({
           <div>
             <label className="mb-2 block text-sm font-medium">Category</label>
             <select
-              value={form.category}
+              required
+              value={form.categoryId}
               onChange={(event) =>
-                setForm({ ...form, category: event.target.value })
+                setForm({ ...form, categoryId: event.target.value })
               }
               className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-400"
             >
-              {(transactionType === "INCOME"
-                ? incomeCategories
-                : expenseCategories
-              ).map((category) => (
-                <option key={category} value={category}>
-                  {category}
+              {availableCategories.map((category) => (
+                <option key={category.categoryId} value={category.categoryId}>
+                  {category.name}
                 </option>
               ))}
             </select>
+            {availableCategories.length === 0 && (
+              <p className="mt-1 text-sm text-rose-600">
+                No categories are available for this transaction type.
+              </p>
+            )}
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-medium">Date</label>
             <input
+              name="date"
               required
               type="date"
               value={form.date}
@@ -157,6 +158,15 @@ export default function TransactionFormModal({
           </div>
         </div>
 
+        {error && (
+          <p
+            role="alert"
+            className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+          >
+            {error}
+          </p>
+        )}
+
         <div className="mt-7 flex gap-3">
           <button
             type="button"
@@ -167,13 +177,14 @@ export default function TransactionFormModal({
           </button>
           <button
             type="submit"
+            disabled={isSubmitting || availableCategories.length === 0}
             className={`flex-1 rounded-xl py-3 font-semibold text-white transition ${
               transactionType === "INCOME"
                 ? "bg-emerald-500 hover:bg-emerald-600"
                 : "bg-rose-500 hover:bg-rose-600"
-            }`}
+            } disabled:cursor-not-allowed disabled:opacity-60`}
           >
-            Save Transaction
+            {isSubmitting ? "Saving..." : "Save Transaction"}
           </button>
         </div>
       </form>

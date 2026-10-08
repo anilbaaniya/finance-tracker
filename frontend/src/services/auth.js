@@ -22,11 +22,20 @@ export async function authenticate(endpoint, credentials) {
       responseBody?.messages && typeof responseBody.messages === "object"
         ? responseBody.messages
         : {};
+    const serverUnavailable =
+      response.status === 502 ||
+      response.status === 503 ||
+      response.status === 504;
     const message =
       responseBody?.message ||
+      (serverUnavailable
+        ? "The authentication server is unavailable. Make sure the backend is running, then try again."
+        : null) ||
       (Object.keys(fieldErrors).length
         ? "Please review the information you entered."
-        : "We couldn't complete your request. Please try again.");
+        : response.status >= 500
+          ? "The server encountered a problem. Please try again in a moment."
+          : "We couldn't complete your request. Please check your details and try again.");
     const error = new Error(message);
     error.fieldErrors = fieldErrors;
     throw error;
