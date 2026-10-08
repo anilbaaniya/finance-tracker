@@ -5,7 +5,8 @@ const navigation = [
   { label: "Transactions", icon: "⇄" },
   { label: "Categories", icon: "▦" },
   { label: "Reports", icon: "▥" },
-  { label: "Settings", icon: "⚙" },
+  { label: "Stats", icon: "◔" },
+  // { label: "Settings", icon: "⚙" },
 ];
 
 export default function SideBar({ activePage, setActivePage }) {

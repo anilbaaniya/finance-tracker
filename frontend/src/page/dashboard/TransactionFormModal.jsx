@@ -5,6 +5,7 @@ export default function TransactionFormModal({
   categories,
   error,
   isSubmitting,
+  isEditing = false,
   setForm,
   setTransactionType,
   transactionType,
@@ -33,10 +34,11 @@ export default function TransactionFormModal({
                   : "text-rose-500"
               }`}
             >
-              NEW TRANSACTION
+              {isEditing ? "EDIT TRANSACTION" : "NEW TRANSACTION"}
             </p>
             <h3 className="mt-2 text-2xl font-extrabold">
-              Add {transactionType === "INCOME" ? "Income" : "Expense"}
+              {isEditing ? "Edit" : "Add"}{" "}
+              {transactionType === "INCOME" ? "Income" : "Expense"}
             </h3>
             <p className="mt-2 text-sm text-slate-400">
               Enter the transaction details below.
@@ -85,10 +87,11 @@ export default function TransactionFormModal({
 
         <div className="mt-5 space-y-4">
           <div>
-            <label className="mb-2 block text-sm font-medium">
+            <label className="mb-2 block text-sm font-medium" htmlFor="transaction-description">
               Description
             </label>
             <input
+              id="transaction-description"
               name="description"
               required
               maxLength={255}
@@ -102,10 +105,11 @@ export default function TransactionFormModal({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium">
+            <label className="mb-2 block text-sm font-medium" htmlFor="transaction-amount">
               Amount (NPR)
             </label>
             <input
+              id="transaction-amount"
               name="amount"
               required
               type="number"
@@ -121,8 +125,9 @@ export default function TransactionFormModal({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium">Category</label>
+            <label className="mb-2 block text-sm font-medium" htmlFor="transaction-category">Category</label>
             <select
+              id="transaction-category"
               required
               value={form.categoryId}
               onChange={(event) =>
@@ -144,8 +149,9 @@ export default function TransactionFormModal({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium">Date</label>
+            <label className="mb-2 block text-sm font-medium" htmlFor="transaction-date">Date</label>
             <input
+              id="transaction-date"
               name="date"
               required
               type="date"
@@ -184,7 +190,13 @@ export default function TransactionFormModal({
                 : "bg-rose-500 hover:bg-rose-600"
             } disabled:cursor-not-allowed disabled:opacity-60`}
           >
-            {isSubmitting ? "Saving..." : "Save Transaction"}
+            {isSubmitting
+              ? isEditing
+                ? "Updating..."
+                : "Saving..."
+              : isEditing
+                ? "Update Transaction"
+                : "Save Transaction"}
           </button>
         </div>
       </form>

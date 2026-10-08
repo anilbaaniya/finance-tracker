@@ -3,6 +3,7 @@ import {
   Navigate,
   RouterProvider,
 } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import Home from "./page/Home";
 import Dashboard from "./page/Dashboard";
 import Login from "./page/Login";
@@ -43,5 +44,10 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      <Toaster position="top-right" />
+    </>
+  );
 }

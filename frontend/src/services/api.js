@@ -58,6 +58,7 @@ export async function apiRequest(path, { method = "GET", body } = {}) {
 
 export const getDashboard = () => apiRequest("/api/dashboard");
 export const getTransactions = () => apiRequest("/api/transactions");
+export const getCategories = () => apiRequest("/api/categories");
 export function initializeCategories() {
   if (!categoryInitializationPromise) {
     const request = apiRequest("/api/categories/defaults", { method: "POST" });
@@ -80,5 +81,19 @@ export function initializeCategories() {
 }
 export const createTransaction = (transaction) =>
   apiRequest("/api/transactions", { method: "POST", body: transaction });
+export const updateTransaction = (transactionId, transaction) =>
+  apiRequest(`/api/transactions/${transactionId}`, {
+    method: "PUT",
+    body: transaction,
+  });
 export const deleteTransaction = (transactionId) =>
   apiRequest(`/api/transactions/${transactionId}`, { method: "DELETE" });
+export const createCategory = (category) =>
+  apiRequest("/api/categories", { method: "POST", body: category });
+export const updateCategory = (categoryId, category) =>
+  apiRequest(`/api/categories/${categoryId}`, {
+    method: "PUT",
+    body: category,
+  });
+export const deleteCategory = (categoryId) =>
+  apiRequest(`/api/categories/${categoryId}`, { method: "DELETE" });

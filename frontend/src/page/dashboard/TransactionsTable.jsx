@@ -4,6 +4,7 @@ export default function TransactionsTable({
   formatMoney,
   isLoading,
   onDelete,
+  onEdit,
   onReturnToDashboard,
   search,
   setSearch,
@@ -56,7 +57,7 @@ export default function TransactionsTable({
               <th className="px-6 py-4 font-semibold">Category</th>
               <th className="px-6 py-4 font-semibold">Date</th>
               <th className="px-6 py-4 text-right font-semibold">Amount</th>
-              <th className="px-6 py-4 text-right font-semibold">Action</th>
+              <th className="px-6 py-4 text-right font-semibold">Actions</th>
             </tr>
           </thead>
 
@@ -120,9 +121,16 @@ export default function TransactionsTable({
 
                 <td className="px-6 py-4 text-right">
                   <button
+                    onClick={() => onEdit(transaction)}
+                    title="Edit transaction"
+                    className="rounded-lg px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                  >
+                    Edit
+                  </button>
+                  <button
                     onClick={() => onDelete(transaction.id)}
                     title="Delete transaction"
-                    className="rounded-lg px-3 py-2 text-xs font-medium text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                    className="rounded-lg px-3 py-2 text-xs font-medium text-rose-500 hover:bg-rose-50 hover:text-rose-600"
                   >
                     Delete
                   </button>

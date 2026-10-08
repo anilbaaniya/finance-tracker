@@ -11,7 +11,9 @@ import com.example.expense_tracker.repository.CategoryRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class CategoryService {
@@ -91,18 +93,30 @@ public class CategoryService {
     @Transactional
     public List<CategoryResponse> ensureDefaultCategories() {
         User currentUser = authenticatedUserService.getCurrentUser();
+        List<Category> existingCategories =
+                categoryRepository.findByUser(currentUser);
+        Set<String> existingCategoryKeys = new HashSet<>();
+        for (Category category : existingCategories) {
+            existingCategoryKeys.add(categoryKey(
+                    category.getName(),
+                    category.getType()));
+        }
 
+        List<Category> missingCategories = new java.util.ArrayList<>();
         for (DefaultCategory defaultCategory : DEFAULT_CATEGORIES) {
-            if (!categoryRepository.existsByUserAndNameAndType(
-                    currentUser,
+            if (existingCategoryKeys.add(categoryKey(
                     defaultCategory.name(),
-                    defaultCategory.type())) {
+                    defaultCategory.type()))) {
                 Category category = new Category();
                 category.setUser(currentUser);
                 category.setName(defaultCategory.name());
                 category.setType(defaultCategory.type());
-                categoryRepository.save(category);
+                missingCategories.add(category);
             }
+        }
+
+        if (!missingCategories.isEmpty()) {
+            categoryRepository.saveAll(missingCategories);
         }
 
         return categoryRepository.findByUser(currentUser).stream()
@@ -187,5 +201,11 @@ public class CategoryService {
     private record DefaultCategory(
             String name,
             Category.CategoryType type) {
+    }
+
+    private String categoryKey(
+            String name,
+            Category.CategoryType type) {
+        return type.name() + ":" + name.trim().toLowerCase(java.util.Locale.ROOT);
     }
 }

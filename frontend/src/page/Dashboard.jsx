@@ -1,17 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import SideBar from "../ui/SideBar";
 import FinancialOverview from "./dashboard/FinancialOverview";
 import SummaryCards from "./dashboard/SummaryCards";
 import TransactionFormModal from "./dashboard/TransactionFormModal";
 import TransactionsTable from "./dashboard/TransactionsTable";
+import CategoriesView from "./dashboard/CategoriesView";
+import ReportsView from "./dashboard/ReportsView";
+import StatsView from "./dashboard/StatsView";
 import { formatMoney } from "./dashboard/dashboardData";
 import {
+  createCategory as postCategory,
   createTransaction as postTransaction,
+  deleteCategory as deleteCategoryRequest,
   deleteTransaction as deleteTransactionRequest,
+  getCategories,
   getDashboard,
   initializeCategories,
   getTransactions,
+  updateCategory as putCategory,
+  updateTransaction as putTransaction,
 } from "../services/api";
 
 const emptyTotals = {
@@ -44,6 +53,7 @@ export default function Dashboard() {
   const [operationError, setOperationError] = useState("");
   const [activePage, setActivePage] = useState("Dashboard");
   const [showForm, setShowForm] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState(null);
   const [transactionType, setTransactionType] = useState("EXPENSE");
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({
@@ -58,7 +68,18 @@ export default function Dashboard() {
       getDashboard(),
       getTransactions(),
     ]);
-    const userCategories = await initializeCategories();
+    let userCategories;
+    try {
+      userCategories = await initializeCategories();
+    } catch (categoryError) {
+      userCategories = await getCategories();
+      if (userCategories.length === 0) {
+        throw new Error(
+          `Could not set up transaction categories: ${categoryError.message}`,
+          { cause: categoryError },
+        );
+      }
+    }
 
     setTotals({
       income: Number(dashboardData.totalIncome ?? 0),
@@ -118,6 +139,7 @@ export default function Dashboard() {
   );
 
   const openTransactionForm = (type) => {
+    setEditingTransaction(null);
     setTransactionType(type);
     const defaultCategory = categories.find(
       (category) => category.type === type,
@@ -127,6 +149,19 @@ export default function Dashboard() {
       amount: "",
       categoryId: defaultCategory ? String(defaultCategory.categoryId) : "",
       date: new Date().toLocaleDateString("en-CA"),
+    });
+    setOperationError("");
+    setShowForm(true);
+  };
+
+  const editTransaction = (transaction) => {
+    setEditingTransaction(transaction);
+    setTransactionType(transaction.type);
+    setForm({
+      title: transaction.title,
+      amount: String(transaction.amount),
+      categoryId: String(transaction.categoryId),
+      date: transaction.date,
     });
     setOperationError("");
     setShowForm(true);
@@ -150,19 +185,27 @@ export default function Dashboard() {
     setIsSubmitting(true);
     setOperationError("");
     try {
-      await postTransaction({
+      const transactionAction = editingTransaction ? "updated" : "saved";
+      const payload = {
         categoryId: Number(form.categoryId),
         type: transactionType,
         amount,
         description: form.title.trim(),
         transactionDate: form.date,
-      });
+      };
+      if (editingTransaction) {
+        await putTransaction(editingTransaction.id, payload);
+      } else {
+        await postTransaction(payload);
+      }
+      toast.success(`Transaction ${transactionAction}.`);
       setShowForm(false);
+      setEditingTransaction(null);
       try {
         await loadDashboard();
       } catch (refreshError) {
-        setOperationError(
-          `Transaction saved, but the dashboard could not refresh: ${refreshError.message}`,
+        toast.error(
+          `Transaction ${transactionAction}, but the dashboard could not refresh: ${refreshError.message}`,
         );
       }
     } catch (submitError) {
@@ -178,16 +221,19 @@ export default function Dashboard() {
   };
 
   const handleDeleteTransaction = async (transactionId) => {
-    setOperationError("");
+    if (!window.confirm("Delete this transaction? This cannot be undone.")) {
+      return;
+    }
     try {
       await deleteTransactionRequest(transactionId);
       setTransactions((current) =>
         current.filter((transaction) => transaction.id !== transactionId),
       );
+      toast.success("Transaction deleted.");
       try {
         await loadDashboard();
       } catch (refreshError) {
-        setOperationError(
+        toast.error(
           `Transaction deleted, but the dashboard could not refresh: ${refreshError.message}`,
         );
       }
@@ -196,8 +242,36 @@ export default function Dashboard() {
         window.localStorage.removeItem("expenseTrackerAuth");
         navigate("/login", { replace: true });
       } else {
-        setOperationError(deleteError.message);
+        toast.error(deleteError.message);
       }
+    }
+  };
+
+  const handleCreateCategory = async (category) => {
+    await postCategory(category);
+    setCategories(await getCategories());
+    toast.success("Category created.");
+  };
+
+  const handleUpdateCategory = async (categoryId, category) => {
+    await putCategory(categoryId, category);
+    setCategories(await getCategories());
+    await loadDashboard();
+    toast.success("Category updated.");
+  };
+
+  const handleDeleteCategory = async (categoryId) => {
+    if (!window.confirm("Delete this category? This cannot be undone.")) {
+      return;
+    }
+    try {
+      await deleteCategoryRequest(categoryId);
+      setCategories((current) =>
+        current.filter((category) => category.categoryId !== categoryId),
+      );
+      toast.success("Category deleted.");
+    } catch (deleteError) {
+      toast.error(deleteError.message);
     }
   };
 
@@ -286,16 +360,7 @@ export default function Dashboard() {
               {error}
             </div>
           )}
-          {operationError && !showForm && (
-            <div
-              role="alert"
-              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-            >
-              {operationError}
-            </div>
-          )}
-
-          <SummaryCards totals={totals} />
+          {activePage === "Dashboard" && <SummaryCards totals={totals} />}
 
           {activePage === "Dashboard" && (
             <FinancialOverview
@@ -304,16 +369,37 @@ export default function Dashboard() {
             />
           )}
 
-          <TransactionsTable
-            activePage={activePage}
-            filteredTransactions={filteredTransactions}
-            formatMoney={formatMoney}
-            isLoading={isLoading}
-            onDelete={handleDeleteTransaction}
-            onReturnToDashboard={() => setActivePage("Dashboard")}
-            search={search}
-            setSearch={setSearch}
-          />
+          {(activePage === "Dashboard" || activePage === "Transactions") && (
+            <TransactionsTable
+              activePage={activePage}
+              filteredTransactions={filteredTransactions}
+              formatMoney={formatMoney}
+              isLoading={isLoading}
+              onDelete={handleDeleteTransaction}
+              onEdit={editTransaction}
+              onReturnToDashboard={() => setActivePage("Dashboard")}
+              search={search}
+              setSearch={setSearch}
+            />
+          )}
+
+          {activePage === "Categories" && (
+            <CategoriesView
+              categories={categories}
+              onCreate={handleCreateCategory}
+              onDelete={handleDeleteCategory}
+              onUpdate={handleUpdateCategory}
+              transactions={transactions}
+            />
+          )}
+
+          {activePage === "Reports" && (
+            <ReportsView transactions={transactions} />
+          )}
+
+          {activePage === "Stats" && (
+            <StatsView transactions={transactions} />
+          )}
         </main>
       </div>
 
@@ -321,10 +407,14 @@ export default function Dashboard() {
         <TransactionFormModal
           addTransaction={addTransaction}
           form={form}
-          onClose={() => setShowForm(false)}
+          onClose={() => {
+            setShowForm(false);
+            setEditingTransaction(null);
+          }}
           categories={categories}
           error={operationError}
           isSubmitting={isSubmitting}
+          isEditing={Boolean(editingTransaction)}
           setForm={setForm}
           setTransactionType={setTransactionType}
           transactionType={transactionType}
